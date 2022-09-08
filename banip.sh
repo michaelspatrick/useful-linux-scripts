@@ -23,5 +23,5 @@ else
   exit
 fi
 
-echo “Banning ip, $1, via jail, $2.”
+echo "Banning ip, $1, via jail, $2."
 sudo fail2ban-client set $2 banip $1
