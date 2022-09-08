@@ -7,10 +7,13 @@ MY_S3_BUCKET="BUCKETNAME"
 MY_S3_FOLDER="BUCKETFOLDER"
 NICE="nice -n 19 ionice -c2 -n 7"
 
+# Backup these directories
 sudo sh -c "tar -cz /etc/httpd > ${BACKUPDIR}/${DATETIME}_httpd.tgz"
 sudo sh -c "tar -cz /etc/fail2ban > ${BACKUPDIR}/${DATETIME}_fail2ban.tgz"
 sudo sh -c "tar -cz /etc/redis > ${BACKUPDIR}/${DATETIME}_redis.tgz"
 sudo sh -c "tar -cz /etc/postfix > ${BACKUPDIR}/${DATETIME}_postfix.tgz"
+
+# Backup these files
 sudo sh -c "cp /etc/my.cnf ${BACKUPDIR}/${DATETIME}_my.cnf; gzip ${BACKUPDIR}/${DATETIME}_my.cnf"
 sudo sh -c "cp /etc/php.ini ${BACKUPDIR}/${DATETIME}_php.ini; gzip ${BACKUPDIR}/${DATETIME}_php.ini"
 
