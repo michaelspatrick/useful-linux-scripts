@@ -1,4 +1,6 @@
 #!/bin/bash
+# Script creates a basic iptables firewall which blocks all traffic from a list of countries.
+# Uses the following website zone files: https://www.ipdeny.com/ipblocks/
 #
 # Cron entry: @reboot /bin/sleep 40 ; /bin/bash -c ". /home/centos/.bashrc ; /home/centos/country-firewall.sh"
 #
