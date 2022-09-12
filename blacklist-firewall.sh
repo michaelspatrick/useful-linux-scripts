@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # Based upon: https://linux-audit.com/blocking-ip-addresses-in-linux-with-iptables/
-# Reads a file of IP addresses to permanently ban and then bans each one
+# Reads a file of IP addresses to permanently ban and then bans each one.
+# File contains one IP address per line.
 #
 # Initial Setup
 # Create blacklist with ipset utility (once)
