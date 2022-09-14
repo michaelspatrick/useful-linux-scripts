@@ -1,5 +1,8 @@
 #!/bin/bash
 #
+# Simple firewall using ipset and iptables.  Implements a blacklist using well known blacklists from the web.
+# Also implements banning of entire countries.
+#
 # Some of the code is based upon: https://github.com/trick77/ipset-blacklist
 #
 # Cron entries:
@@ -11,14 +14,12 @@
 BLACKLIST_COUNTRIES=('ar' 'bd' 'bg' 'by' 'cn' 'co' 'iq' 'ir' 'kp' 'ly' 'mn' 'mu' 'pa' 'ro' 'ru' 'sd' 'tw' 'ua' 've' 'vn')
 ETCDIR="/etc/firewall"
 REPORT_EMAIL="email@domain.com"
-REPORT_SUBJECT="BLOCKED Packets report on $(hostname | tr 'a-z' 'A-Z')"
-SAVEFILE="${ETCDIR}/iptables.conf"
 VERBOSE=yes # probably set to "no" for cron jobs, default to yes
 
 # List of URLs for IP blacklists. Currently, only IPv4 is supported in this script, everything else will be filtered.
 BLACKLISTS=(
     # "file:///etc/ipset-blacklist/ip-blacklist-custom.list" # optional, for your personal nemeses (no typo, plural)
-    "file:///etc/firewall/custom.txt" # Custom list created by Mike Patrick
+    "file:///etc/firewall/custom.list" # Custom list created by Mike Patrick
     "https://www.projecthoneypot.org/list_of_ips.php?t=d&rss=1" # Project Honey Pot Directory of Dictionary Attacker IPs
     "https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=1.1.1.1"  # TOR Exit Nodes
     "http://danger.rulez.sk/projects/bruteforceblocker/blist.php" # BruteForceBlocker IP List
@@ -36,8 +37,10 @@ MAXELEM=131072
 # ----------------------------------------------- End Configuration -----------------------------------------------
 
 # Check to ensure running as root
-if [ "$EUID" -ne 0 ]
-  then echo "Must be run as root"
+if [ "$EUID" -ne 0 ]; then
+  if [[ ${VERBOSE:-no} == yes ]]; then
+    echo "Must be run as root"
+  fi
   exit 1
 fi
 
@@ -49,6 +52,8 @@ if ! exists curl && exists egrep && exists grep && exists ipset && exists iptabl
   exit 1
 fi
 
+REPORT_SUBJECT="BLOCKED Packets report on $(hostname | tr 'a-z' 'A-Z')"
+SAVEFILE="${ETCDIR}/iptables.save"
 FORCE=yes # will create the ipset-iptable binding if it does not already exist
 let IPTABLES_IPSET_RULE_NUMBER=1 # if FORCE is yes, the number at which place insert the ipset-match rule (default to 1)
 
@@ -78,11 +83,15 @@ help() {
 whitelist() {
   iptables -X whitelist
   # Whitelist specified IPs
-  echo "Creating whitelist..."
+  if [[ ${VERBOSE:-no} == yes ]]; then
+    echo "Creating whitelist..."
+  fi
   ipset create whitelist hash:ip hashsize 4096
-  for IP in $(cat ${ETCDIR}/whitelist.txt)
+  for IP in $(cat ${ETCDIR}/whitelist.list)
   do
-    echo "Whitelisting $IP"
+    if [[ ${VERBOSE:-no} == yes ]]; then
+      echo "Whitelisting $IP"
+    fi
     ipset add whitelist $IP
   done
   #iptables -I whitelist -m set --match-set "whitelist" src -j ACCEPT -m comment --comment "whitelist"
@@ -95,13 +104,17 @@ ban_countries() {
   done
 
   # Block specified countries
-  echo "Blocking specific country..."
+  if [[ ${VERBOSE:-no} == yes ]]; then
+    echo "Blocking specific country..."
+  fi
   for COUNTRY in "${BLACKLIST_COUNTRIES[@]}"; do
     ipset create "${COUNTRY}" hash:net
   done
   iptables -v -F countries
   for i in "${BLACKLIST_COUNTRIES[@]}"; do
-    echo "Ban IP of country ${i}"
+    if [[ ${VERBOSE:-no} == yes ]]; then
+      echo "Ban IP of country ${i}"
+    fi
     ipset flush "${i}"
     for IP in $(wget --no-check-certificate -O - https://www.ipdeny.com/ipblocks/data/countries/${i}.zone)
     do
@@ -226,8 +239,8 @@ blacklist() {
     DO_OPTIMIZE_CIDR=yes
   fi
 
-  if [[ ! -d $(dirname "${ETCDIR}/ip-blacklist.list") || ! -d $(dirname "${ETCDIR}/ip-blacklist.restore") ]]; then
-    echo >&2 "Error: missing directory(s): $(dirname "${ETCDIR}/ip-blacklist.list" "${ETCDIR}/ip-blacklist.restore"|sort -u)"
+  if [[ ! -d $(dirname "${ETCDIR}/iptables.list") || ! -d $(dirname "${ETCDIR}/iptables.restore") ]]; then
+    echo >&2 "Error: missing directory(s): $(dirname "${ETCDIR}/iptables.list" "${ETCDIR}/iptables.restore"|sort -u)"
     exit 1
   fi
 
@@ -275,22 +288,22 @@ blacklist() {
   done
 
   # sort -nu does not work as expected
-  sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|22[4-9]\.|23[0-9]\.)/d' "$IP_BLACKLIST_TMP"|sort -n|sort -mu >| "${ETCDIR}/ip-blacklist.list"
+  sed -r -e '/^(0\.0\.0\.0|10\.|127\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|22[4-9]\.|23[0-9]\.)/d' "$IP_BLACKLIST_TMP"|sort -n|sort -mu >| "${ETCDIR}/iptables.list"
   if [[ ${DO_OPTIMIZE_CIDR} == yes ]]; then
     if [[ ${VERBOSE:-no} == yes ]]; then
-      echo -e "\\nAddresses before CIDR optimization: $(wc -l "${ETCDIR}/ip-blacklist.list" | cut -d' ' -f1)"
+      echo -e "\\nAddresses before CIDR optimization: $(wc -l "${ETCDIR}/iptables.list" | cut -d' ' -f1)"
     fi
-    < "${ETCDIR}/ip-blacklist.list" iprange --optimize - > "$IP_BLACKLIST_TMP" 2>/dev/null
+    < "${ETCDIR}/iptables.list" iprange --optimize - > "$IP_BLACKLIST_TMP" 2>/dev/null
     if [[ ${VERBOSE:-no} == yes ]]; then
       echo "Addresses after CIDR optimization:  $(wc -l "$IP_BLACKLIST_TMP" | cut -d' ' -f1)"
     fi
-    cp "$IP_BLACKLIST_TMP" "${ETCDIR}/ip-blacklist.list"
+    cp "$IP_BLACKLIST_TMP" "${ETCDIR}/iptables.list"
   fi
 
   rm -f "$IP_BLACKLIST_TMP"
 
   # family = inet for IPv4 only
-cat >| "${ETCDIR}/ip-blacklist.restore" <<EOF
+cat >| "${ETCDIR}/iptables.restore" <<EOF
 create blacklist-tmp -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
 create blacklist -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
 EOF
@@ -298,18 +311,18 @@ EOF
   # can be IPv4 including netmask notation
   # IPv6 ? -e "s/^([0-9a-f:./]+).*/add blacklist-tmp \1/p" \ IPv6
   sed -rn -e '/^#|^$/d' \
-    -e "s/^([0-9./]+).*/add blacklist-tmp \\1/p" "${ETCDIR}/ip-blacklist.list" >> "${ETCDIR}/ip-blacklist.restore"
+    -e "s/^([0-9./]+).*/add blacklist-tmp \\1/p" "${ETCDIR}/iptables.list" >> "${ETCDIR}/iptables.restore"
 
-cat >> "${ETCDIR}/ip-blacklist.restore" <<EOF
+cat >> "${ETCDIR}/iptables.restore" <<EOF
 swap blacklist blacklist-tmp
 destroy blacklist-tmp
 EOF
 
-  ipset -file  "${ETCDIR}/ip-blacklist.restore" restore
+  ipset -file  "${ETCDIR}/iptables.restore" restore
 
   if [[ ${VERBOSE:-no} == yes ]]; then
     echo
-    echo "Blacklisted addresses found: $(wc -l "${ETCDIR}/ip-blacklist.list" | cut -d' ' -f1)"
+    echo "Blacklisted addresses found: $(wc -l "${ETCDIR}/iptables.list" | cut -d' ' -f1)"
   fi
 }
 
