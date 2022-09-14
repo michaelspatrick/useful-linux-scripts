@@ -291,8 +291,8 @@ blacklist() {
 
   # family = inet for IPv4 only
 cat >| "${ETCDIR}/ip-blacklist.restore" <<EOF
-  create blacklist-tmp -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
-  create blacklist -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
+create blacklist-tmp -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
+create blacklist -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
 EOF
 
   # can be IPv4 including netmask notation
@@ -301,8 +301,8 @@ EOF
     -e "s/^([0-9./]+).*/add blacklist-tmp \\1/p" "${ETCDIR}/ip-blacklist.list" >> "${ETCDIR}/ip-blacklist.restore"
 
 cat >> "${ETCDIR}/ip-blacklist.restore" <<EOF
-  swap blacklist blacklist-tmp
-  destroy blacklist-tmp
+swap blacklist blacklist-tmp
+destroy blacklist-tmp
 EOF
 
   ipset -file  "${ETCDIR}/ip-blacklist.restore" restore
