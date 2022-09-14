@@ -1,8 +1,7 @@
 #!/bin/bash
 #
-# Simple firewall using ipset and iptables.  Implements a blacklist using well known blacklists from the web.
+# Simple firewall using ipset and iptables.  Implements a blacklist using well known blacklists from the web. 
 # Also implements banning of entire countries.
-#
 # Some of the code is based upon: https://github.com/trick77/ipset-blacklist
 #
 # Cron entries:
@@ -13,13 +12,14 @@
 
 BLACKLIST_COUNTRIES=('ar' 'bd' 'bg' 'by' 'cn' 'co' 'iq' 'ir' 'kp' 'ly' 'mn' 'mu' 'pa' 'ro' 'ru' 'sd' 'tw' 'ua' 've' 'vn')
 ETCDIR="/etc/firewall"
-REPORT_EMAIL="email@domain.com"
+REPORT_EMAIL="toritejutsu@gmail.com"
 VERBOSE=yes # probably set to "no" for cron jobs, default to yes
 
 # List of URLs for IP blacklists. Currently, only IPv4 is supported in this script, everything else will be filtered.
 BLACKLISTS=(
     # "file:///etc/ipset-blacklist/ip-blacklist-custom.list" # optional, for your personal nemeses (no typo, plural)
     "file:///etc/firewall/custom.list" # Custom list created by Mike Patrick
+    "file:///etc/firewall/failed-logins.list" # Custom list created by Mike Patrick
     "https://www.projecthoneypot.org/list_of_ips.php?t=d&rss=1" # Project Honey Pot Directory of Dictionary Attacker IPs
     "https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=1.1.1.1"  # TOR Exit Nodes
     "http://danger.rulez.sk/projects/bruteforceblocker/blist.php" # BruteForceBlocker IP List
@@ -77,7 +77,6 @@ help() {
   echo "Exit status:"
   echo "0  if OK"
   echo "1  if not run as root"
-  exit 0
 }
 
 whitelist() {
@@ -130,7 +129,6 @@ create() {
   blacklist
   ban_countries
   save_config
-  exit 0
 }
 
 # Function to initialize the iptables rules
@@ -151,7 +149,6 @@ init() {
   iptables -I FORWARD -m set --match-set whitelist src -j ACCEPT
 
   create
-  exit 0
 }
 
 # Function to destroy the iptables rules
@@ -163,13 +160,11 @@ destroy() {
   for COUNTRY in "${BLACKLIST_COUNTRIES[@]}"; do
     ipset destroy ${COUNTRY}
   done
-  exit 0
 }
 
 # Function to show status
 status() {
   iptables -v -n -L
-  exit 0
 }
 
 # Function to save configuration to ${SAVEFILE}
@@ -180,13 +175,11 @@ save_config() {
 # Function to read configuration from ${SAVEFILE}
 read_config() {
   ipset restore < ${SAVEFILE}
-  exit 0
 }
 
 # Function to list rules
 list() {
   ipset list
-  exit 0
 }
 
 # Function to email a report of activity
@@ -227,12 +220,10 @@ report() {
 
   # Reset the iptables counters
   /sbin/iptables -Z
-
-  exit 0
 }
 
 blacklist() {
-  iptables -X blacklist
+  # iptables -X blacklist
 
   DO_OPTIMIZE_CIDR=no
   if exists iprange && [[ ${OPTIMIZE_CIDR:-yes} != no ]]; then
@@ -270,6 +261,12 @@ blacklist() {
       exit 1
     fi
   fi
+
+  # Look for failed SSH logins and break-in attempts in the logs
+  TMPFILE="/tmp/IP.txt"
+  cat /var/log/secure | grep BREAK-IN | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > $TMPFILE
+  cat /var/log/fail2ban.log | grep sshd | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> $TMPFILE
+  cat $TMPFILE | sort | uniq > ${ETCDIR}/failed-logins.list
 
   IP_BLACKLIST_TMP=$(mktemp)
   for i in "${BLACKLISTS[@]}"
@@ -329,8 +326,10 @@ EOF
 # Check parameters
 if [ "$1" = "--status" ]; then
   status
+  exit 0
 elif [ "$1" = "--destroy" ]; then
   destroy
+  exit 0
 elif [ "$1" = "--init" ]; then
   init
   create
@@ -338,23 +337,32 @@ elif [ "$1" = "--init" ]; then
   exit 0
 elif [ "$1" = "--list" ]; then
   list
+  exit 0
 elif [ "$1" = "--reload-blacklist" ]; then
   blacklist
+  save_config
   exit 0
 elif [ "$1" = "--reload-countries" ]; then
   ban_countries
+  save_config
   exit 0
 elif [ "$1" = "--reload-whitelist" ]; then
   whitelist
+  save_config
   exit 0
 elif [ "$1" = "--report" ]; then
   report
+  exit 0
 elif [ "$1" = "--restore" ]; then
   read_config
+  exit 0
 elif [ "$1" = "--save" ]; then
   save_config
+  exit 0
 elif [ "$1" = "--help" ]; then
   help
+  exit 0
 else
   help
+  exit 0
 fi
