@@ -28,7 +28,10 @@ BLACKLISTS=(
     "https://lists.blocklist.de/lists/all.txt" # blocklist.de attackers
     "https://blocklist.greensnow.co/greensnow.txt" # GreenSnow
     "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset" # Firehol Level 1
+    "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level2.netset" # Firehol Level 2
+    "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level3.netset" # Firehol Level 3
     "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/stopforumspam_7d.ipset" # Stopforumspam via Firehol
+    "https://www.binarydefense.com/banlist.txt" # Binary Defense Systems Artillery Threat Intelligence Feed and Banlist Feed
     # "https://raw.githubusercontent.com/ipverse/rir-ip/master/country/zz/ipv4-aggregated.txt" # Ban an entire country(-code), see https://github.com/ipverse/rir-ip
     # "https://raw.githubusercontent.com/ipverse/asn-ip/master/as/1234/ipv4-aggregated.txt" # Ban a specific autonomous system (ISP), see https://github.com/ipverse/asn-ip
 )
@@ -63,6 +66,7 @@ help() {
   echo "Utilizes iptables and ipset to create a basic firewall with country banning, a blacklist, and whitelist."
   echo "Configuration files are stored in ${ETCDIR}."
   echo "One of the following parameters are required:"
+  echo
   echo "  --destroy		Attempt to destroy and flush the firewall rules."
   echo "  --help		Show this message."
   echo "  --init		Ensure ipset is installed and setup the initial chains and match sets."
@@ -74,6 +78,7 @@ help() {
   echo "  --restore		Restore the rules from ${SAVEFILE}."
   echo "  --save		Save the rules to ${SAVEFILE}."
   echo "  --status		Show the status of the rules."
+  echo
   echo "Exit status:"
   echo "0  if OK"
   echo "1  if not run as root"
@@ -237,10 +242,10 @@ blacklist() {
   if ! ipset list -n|command grep -q "blacklist"; then
     if [[ ${FORCE:-no} != yes ]]; then
       echo >&2 "Error: ipset does not exist yet, add it using:"
-      echo >&2 "# ipset create blacklist -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}"
+      echo >&2 "# ipset -exist -quiet create blacklist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}"
       exit 1
     fi
-    if ! ipset create "blacklist" -exist hash:net family inet hashsize "${HASHSIZE:-16384}" maxelem "${MAXELEM:-65536}"; then
+    if ! ipset create -exist -quiet "blacklist" hash:net family inet hashsize "${HASHSIZE:-16384}" maxelem "${MAXELEM:-65536}"; then
       echo >&2 "Error: while creating the initial ipset"
       exit 1
     fi
@@ -262,7 +267,8 @@ blacklist() {
 
   # Look for failed SSH logins and break-in attempts in the logs
   TMPFILE="/tmp/IP.txt"
-  cat /var/log/secure | grep BREAK-IN | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > $TMPFILE
+  cat ${ETCDIR}/failed-logins.list > $TMPFILE
+  cat /var/log/secure | grep BREAK-IN | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> $TMPFILE
   cat /var/log/fail2ban.log | grep sshd | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> $TMPFILE
   cat $TMPFILE | sort | uniq > ${ETCDIR}/failed-logins.list
 
@@ -299,8 +305,8 @@ blacklist() {
 
   # family = inet for IPv4 only
 cat >| "${ETCDIR}/iptables.restore" <<EOF
-create blacklist-tmp -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
-create blacklist -exist hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
+create blacklist-tmp -exist -quiet hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
+create blacklist -exist -quiet hash:net family inet hashsize ${HASHSIZE:-16384} maxelem ${MAXELEM:-65536}
 EOF
 
   # can be IPv4 including netmask notation
