@@ -17,7 +17,6 @@ VERBOSE=yes # probably set to "no" for cron jobs, default to yes
 
 # List of URLs for IP blacklists. Currently, only IPv4 is supported in this script, everything else will be filtered.
 BLACKLISTS=(
-    # "file:///etc/ipset-blacklist/ip-blacklist-custom.list" # optional, for your personal nemeses (no typo, plural)
     "file:///etc/firewall/custom.txt" # Custom list created by Mike Patrick
     "https://www.projecthoneypot.org/list_of_ips.php?t=d&rss=1" # Project Honey Pot Directory of Dictionary Attacker IPs
     "https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=1.1.1.1"  # TOR Exit Nodes
@@ -59,13 +58,11 @@ help() {
   echo "One of the following parameters are required:"
   echo "  --create		Attempt to create the firewall rules.  Make sure you have run --init first."
   echo "  --destroy		Attempt to destroy and flush the firewall rules."
-  # echo "  --download    	Download popular blacklists and load into the /etc/firewall/banned.conf file."
   echo "  --help		Show this message."
   echo "  --init		Setup the initial chains, match sets, and ensure ipset is installed."
   echo "  --list		List chains and match sets."
   echo "  --reload-blacklist	Reload blacklist."
   echo "  --reload-countries	Reload countries blacklist."
-  # echo "  --reload-custom	Reload custom blacklist."
   echo "  --reload-whitelist	Reload whitelist."
   echo "  --report		Email a report."
   echo "  --restore		Restore the rules from ${SAVEFILE}."
@@ -89,19 +86,6 @@ whitelist() {
   done
   #iptables -I whitelist -m set --match-set "whitelist" src -j ACCEPT -m comment --comment "whitelist"
 }
-
-# custom() {
-#   iptables -X custom
-#   # Specific IPs to Blacklist
-#   echo "Creating custom blacklist..."
-#   ipset create custom hash:ip hashsize 4096
-#   for IP in $(cat ${ETCDIR}/custom.txt)
-#   do
-#     echo "Banning $IP"
-#     ipset add custom $IP
-#   done
-#   #iptables -I blacklist -m set --match-set "custom" src -j DROP -m comment --comment "custom"
-# }
 
 ban_countries() {
   iptables -X countries
@@ -130,7 +114,6 @@ ban_countries() {
 create() {
   whitelist
   blacklist
-  # custom
   ban_countries
   exit 0
 }
@@ -159,7 +142,6 @@ destroy() {
   iptables -X blacklist
   iptables -X whitelist
   iptables -X countries
-  # iptables -X custom
   for COUNTRY in "${BLACKLIST_COUNTRIES[@]}"; do
     ipset destroy ${COUNTRY}
   done
@@ -327,37 +309,6 @@ EOF
   fi
 }
 
-# download() {
-#   curl -s https://www.spamhaus.org/drop/drop.txt | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/spamhaus-drop.conf
-#   curl -s https://www.spamhaus.org/drop/edrop.txt | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/spamhaus-edrop.conf
-#   curl -s https://www.spamhaus.org/drop/drop.lasso | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/drop-lasso.conf
-#   curl -s https://check.torproject.org/torbulkexitlist?ip=1.1.1.1 | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/tor-exit.conf
-#   curl -s https://cinsscore.com/list/ci-badguys.txt | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/ci-badguys.conf
-#   #curl -s http://danger.rulez.sk/projects/bruteforceblocker/blist.php | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/bruteforce.conf
-#   curl -s https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/feodo.conf  
-#   curl -s https://sslbl.abuse.ch/blacklist/sslipblacklist.csv | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/sslbl.conf
-#   #curl -s https://www.projecthoneypot.org/list_of_ips.php?t=s&rss=1 | grep -Po '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /etc/firewall/php-spammers.conf
-#   #curl -s https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset > /etc/firewall/firehol_level1.conf
-#   curl -s https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/stopforumspam_7d.ipset > /etc/firewall/stopforumspam.conf
-#
-#   cat /etc/firewall/personal.conf > /tmp/banned.conf
-#   cat /etc/firewall/spamhaus-drop.conf >> /tmp/banned.conf
-#   cat /etc/firewall/spamhaus-edrop.conf >> /tmp/banned.conf
-#   cat /etc/firewall/drop-lasso.conf >> /tmp/banned.conf
-#   cat /etc/firewall/tor-exit.conf >> /tmp/banned.conf
-#   cat /etc/firewall/ci-badguys.conf >> /tmp/banned.conf
-#   cat /etc/firewall/bruteforce.conf >> /tmp/banned.conf
-#   cat /etc/firewall/feodo.conf >> /tmp/banned.conf
-#   cat /etc/firewall/sslbl.conf >> /tmp/banned.conf
-#   cat /etc/firewall/php-spammers.conf >> /tmp/banned.conf
-#   #cat /etc/firewall/firehol_level1.conf >> /tmp/banned.conf
-#   cat /etc/firewall/stopforumspam.conf >> /tmp/banned.conf
-#
-#   cat /tmp/banned.conf | sort | uniq > /etc/firewall/banned.conf 
-#
-#   exit 0
-# }
-
 # Check parameters
 if [ "$1" = "--status" ]; then
   status
@@ -366,8 +317,6 @@ elif [ "$1" = "--create" ]; then
   save_config
 elif [ "$1" = "--destroy" ]; then
   destroy
-# elif [ "$1" = "--download" ]; then
-#   download
 elif [ "$1" = "--init" ]; then
   init
   create
@@ -380,9 +329,6 @@ elif [ "$1" = "--reload-blacklist" ]; then
 elif [ "$1" = "--reload-countries" ]; then
   ban_countries
   exit 0
-# elif [ "$1" = "--reload-custom" ]; then
-#   custom
-#   exit 0
 elif [ "$1" = "--reload-whitelist" ]; then
   whitelist
   exit 0
