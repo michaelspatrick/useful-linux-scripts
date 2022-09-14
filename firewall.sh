@@ -77,6 +77,7 @@ help() {
   echo "  --report		Email a report."
   echo "  --restore		Restore the rules from ${SAVEFILE}."
   echo "  --save		Save the rules to ${SAVEFILE}."
+  echo "  --stats		Show sats on number of entries per match set."
   echo "  --status		Show the status of the rules."
   echo
   echo "Exit status:"
@@ -327,6 +328,33 @@ EOF
   fi
 }
 
+read_dom () {
+  local IFS=\>
+  read -d \< ENTITY CONTENT
+  local ret=$?
+  TAG_NAME=${ENTITY%% *}
+  ATTRIBUTES=${ENTITY#* }
+  return $ret
+}
+
+parse_dom () {
+  if [[ $TAG_NAME = "ipset" ]] ; then
+    eval local $ATTRIBUTES
+    NAME=$name
+  elif [[ $TAG_NAME = "numentries" ]] ; then
+    eval local $ATTRIBUTES
+    NUMENTRIES=$CONTENT
+    #echo "$NAME: $NUMENTRIES"
+    printf "%-14s %7s\n" $NAME $NUMENTRIES
+  fi
+}
+
+stats() {
+  echo "Match Set      Entries"
+  echo "---------      -------"
+  ipset -output xml list | while read_dom; do parse_dom; done
+}
+
 # Check parameters
 if [ "$1" = "--status" ]; then
   status
@@ -362,6 +390,9 @@ elif [ "$1" = "--restore" ]; then
   exit 0
 elif [ "$1" = "--save" ]; then
   save_config
+  exit 0
+elif [ "$1" = "--stats" ]; then
+  stats
   exit 0
 elif [ "$1" = "--help" ]; then
   help
