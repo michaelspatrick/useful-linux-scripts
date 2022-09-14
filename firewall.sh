@@ -147,8 +147,6 @@ init() {
   iptables -N whitelist
   iptables -I INPUT -m set --match-set whitelist src -j ACCEPT
   iptables -I FORWARD -m set --match-set whitelist src -j ACCEPT
-
-  create
 }
 
 # Function to destroy the iptables rules
