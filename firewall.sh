@@ -10,7 +10,7 @@
 
 BLACKLIST_COUNTRIES=('ar' 'bd' 'bg' 'by' 'cn' 'co' 'iq' 'ir' 'kp' 'ly' 'mn' 'mu' 'pa' 'ro' 'ru' 'sd' 'tw' 'ua' 've' 'vn')
 ETCDIR="/etc/firewall"
-REPORT_EMAIL="toritejutsu@gmail.com"
+REPORT_EMAIL="email@domain.com"
 REPORT_SUBJECT="BLOCKED Packets report on $(hostname | tr 'a-z' 'A-Z')"
 SAVEFILE="${ETCDIR}/iptables.conf"
 VERBOSE=yes # probably set to "no" for cron jobs, default to yes
