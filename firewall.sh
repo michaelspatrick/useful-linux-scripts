@@ -17,6 +17,7 @@ VERBOSE=yes # probably set to "no" for cron jobs, default to yes
 
 # List of URLs for IP blacklists. Currently, only IPv4 is supported in this script, everything else will be filtered.
 BLACKLISTS=(
+    # "file:///etc/ipset-blacklist/ip-blacklist-custom.list" # optional, for your personal nemeses (no typo, plural)
     "file:///etc/firewall/custom.txt" # Custom list created by Mike Patrick
     "https://www.projecthoneypot.org/list_of_ips.php?t=d&rss=1" # Project Honey Pot Directory of Dictionary Attacker IPs
     "https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=1.1.1.1"  # TOR Exit Nodes
@@ -55,11 +56,11 @@ let IPTABLES_IPSET_RULE_NUMBER=1 # if FORCE is yes, the number at which place in
 help() {
   echo "Usage: $0 <OPTION>"
   echo "Utilizes iptables and ipset to create a basic firewall with country banning, a blacklist, and whitelist."
+  echo "Configuration files are stored in ${ETCDIR}."
   echo "One of the following parameters are required:"
-  echo "  --create		Attempt to create the firewall rules.  Make sure you have run --init first."
   echo "  --destroy		Attempt to destroy and flush the firewall rules."
   echo "  --help		Show this message."
-  echo "  --init		Setup the initial chains, match sets, and ensure ipset is installed."
+  echo "  --init		Ensure ipset is installed and setup the initial chains and match sets."
   echo "  --list		List chains and match sets."
   echo "  --reload-blacklist	Reload blacklist."
   echo "  --reload-countries	Reload countries blacklist."
@@ -115,13 +116,15 @@ create() {
   whitelist
   blacklist
   ban_countries
+  save_config
   exit 0
 }
 
 # Function to initialize the iptables rules
 init() {
-  mkdir -p /etc/firewall
+  mkdir -p ${ETCDIR}
   yum -y install ipset
+
   iptables -N countries
   iptables -I INPUT -j countries -m comment --comment "Blocked countries"
   iptables -I FORWARD -j countries -m comment --comment "Blocked countries"
@@ -133,6 +136,8 @@ init() {
   iptables -N whitelist
   iptables -I INPUT -m set --match-set whitelist src -j ACCEPT
   iptables -I FORWARD -m set --match-set whitelist src -j ACCEPT
+
+  create
   exit 0
 }
 
@@ -157,7 +162,6 @@ status() {
 # Function to save configuration to ${SAVEFILE}
 save_config() {
   ipset save > ${SAVEFILE}
-  exit 0
 }
 
 # Function to read configuration from ${SAVEFILE}
@@ -312,15 +316,13 @@ EOF
 # Check parameters
 if [ "$1" = "--status" ]; then
   status
-elif [ "$1" = "--create" ]; then
-  create
-  save_config
 elif [ "$1" = "--destroy" ]; then
   destroy
 elif [ "$1" = "--init" ]; then
   init
   create
   save_config
+  exit 0
 elif [ "$1" = "--list" ]; then
   list
 elif [ "$1" = "--reload-blacklist" ]; then
