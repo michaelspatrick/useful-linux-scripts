@@ -1,4 +1,5 @@
 #!/bin/sh
+
 # This script uses pt-secure-collect from the Percona Toolkit to sanitize SQL statements in a text file.
 # The original tool requires there be a ";" at the end of each line.
 # Thanks to Michael Benshoof for providing the regex which is used with a sed command to append a semicolon to each SQL statement.
