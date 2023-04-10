@@ -52,7 +52,16 @@ die() {
   local msg=$1
   local code=${2-1} # default exit status 1
   msg "$msg"
+  setup_colors
+  debug
   exit "$code"
+}
+
+debug() {
+  msg "${RED}Read parameters:${NOFORMAT}"
+  msg "- input-file: ${input_file}"
+  msg "- output-file: ${output_file}"
+  msg "- arguments: ${args[*]-}"
 }
 
 parse_params() {
@@ -109,8 +118,3 @@ else
   sh -c "sed -r '/^(INSERT|UPDATE|SELECT|DELETE)/ s/$/;/' ${input_file} | sed -r 's/;;/;/' | pt-secure-collect sanitize --no-sanitize-hostnames" > ${output_file}
   exit 0
 fi
-
-msg "${RED}Read parameters:${NOFORMAT}"
-msg "- input-file: ${input_file}"
-msg "- output-file: ${output_file}"
-msg "- arguments: ${args[*]-}"
