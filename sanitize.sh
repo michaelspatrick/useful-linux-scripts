@@ -101,7 +101,7 @@ parse_params() {
       shift
       ;;
     -v | --version) version ;;
-    -?*) die "Unknown option: $1" ;;
+    -?*) die "${RED}Unknown option: $1${NOFORMAT}" ;;
     *) break ;;
     esac
     shift
