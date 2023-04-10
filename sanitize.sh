@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+#
+# This script uses pt-secure-collect from the Percona Toolkit to sanitize SQL statements in a text file.
+# The original tool requires there be a ";" at the end of each line.
+# Created by Michael Patrick with special thanks to Michael Benshoof for providing the regex which is used
+# with a sed command to append a semicolon to each SQL statement.
+# This effectively solves the problem for output from SHOW ENGINE INNODB STATUS, SHOW PRCOESSLIST, and other
+# SQL commands in MySQL where a semicolon is stripped off the end.
+#
 
 set -Eeuo pipefail
 trap cleanup SIGINT SIGTERM ERR EXIT
