@@ -17,7 +17,7 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
 usage() {
   cat << EOF # remove the space between << and EOF, this is due to web plugin issue
-Usage: $(basename "${BASH_SOURCE[0]}") [-h] -i <input-file> -o <output-file>
+Usage: $(basename "${BASH_SOURCE[0]}") [-d] [-h] [-v] -i <input-file> -o <output-file>
 
 Script utilizes pt-secure-collect from the Percona Toolkit to strip PII data
 from within SQL commands in a text file and writes to an output file. This
