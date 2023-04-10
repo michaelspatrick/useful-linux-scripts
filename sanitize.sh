@@ -98,7 +98,7 @@ fi
 
 # check whether pt-secure-collect command exists
 if ! command -v pt-secure-collect &> /dev/null; then
-  die "The utility, pt-secure-collect, does not exist.  Please install the latest version of the Percona Toolkit."
+  die "The utility, pt-secure-collect, was not found.  Please install the latest version of the Percona Toolkit."
 fi
 
 # perform replace operation
