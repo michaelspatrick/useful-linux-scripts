@@ -9,8 +9,10 @@ usage() {
   cat << EOF # remove the space between << and EOF, this is due to web plugin issue
 Usage: $(basename "${BASH_SOURCE[0]}") [-h] -i <input-file> -o <output-file>
 
-Script adds a semicolon to SQL commands missing one.  This allows the pt-secure-collect
-utility to work as expected.  The original file is not modified.
+Script utilizes pt-secure-collect from the Percona Toolkit to strip PII data
+from within SQL commands in a text file and writes to an output file. This
+utility works around an issue where all SQL queries must have a trailing
+semicolon for pt-secure-collect to work properly.
 
 Available options:
 
