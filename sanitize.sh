@@ -132,8 +132,12 @@ fi
 # perform replace operation
 if [ -z ${output_file+x} ]; then
   sed -r '/^(INSERT|UPDATE|SELECT|DELETE)/ s/$/;/' ${input_file} | sed -r 's/;;/;/' | pt-secure-collect sanitize --no-sanitize-hostnames
-  exit 0
 else
   sh -c "sed -r '/^(INSERT|UPDATE|SELECT|DELETE)/ s/$/;/' ${input_file} | sed -r 's/;;/;/' | pt-secure-collect sanitize --no-sanitize-hostnames" > ${output_file}
-  exit 0
+  if [ -s ${output_file} ]; then
+    msg "${GREEN}Input file, ${input_file}, sanitized and written to ${output_file}${NOFORMAT}."
+    exit 0
+  else
+    die "${RED}Error writing to output file, ${output_file}!${NOFORMAT}"
+  fi
 fi
