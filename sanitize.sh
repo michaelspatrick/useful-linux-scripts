@@ -30,6 +30,7 @@ Available options:
 -h, --help         Print this help and exit
 -i, --input-file   Read the input text file
 -o, --output-file  Write the output to a text file
+-v, --version      Show version information
 EOF
   exit
 }
