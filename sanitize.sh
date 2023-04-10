@@ -48,6 +48,7 @@ setup_colors() {
 }
 
 msg() {
+  setup_colors
   echo >&2 -e "${1-}"
 }
 
@@ -80,6 +81,7 @@ debug() {
 }
 
 parse_params() {
+  setup_colors
   # default values of variables set from params
   input_file=''
   output_file=''
@@ -108,8 +110,8 @@ parse_params() {
   args=("$@")
 
   # check required params and arguments
-  [[ -z "${input_file-}" ]] && die "Missing required parameter: input-file"
-  [[ -z "${output_file-}" ]] && die "Missing required parameter: output-file"
+  [[ -z "${input_file-}" ]] && die "${RED}Missing required parameter: input-file${NOFORMAT}"
+  [[ -z "${output_file-}" ]] && die "${RED}Missing required parameter: output-file${NOFORMAT}"
 
   return 0
 }
@@ -119,12 +121,12 @@ setup_colors
 
 # check whether input file exists
 if [ ! -f ${input_file} ]; then
-  die "${RED}Input file, ${input_file}, does not exist!"
+  die "${RED}Input file, ${input_file}, does not exist!${NOFORMAT}"
 fi
 
 # check whether pt-secure-collect command exists
 if ! command -v pt-secure-collect &> /dev/null; then
-  die "${RED}The utility, pt-secure-collect, was not found.  Please install the latest version of the Percona Toolkit."
+  die "${RED}The utility, pt-secure-collect, was not found.  Please install the latest version of the Percona Toolkit.${NOFORMAT}"
 fi
 
 # perform replace operation
