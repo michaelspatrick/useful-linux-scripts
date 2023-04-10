@@ -8,6 +8,8 @@
 # SQL commands in MySQL where a semicolon is stripped off the end.
 #
 
+version=0.1
+
 set -Eeuo pipefail
 trap cleanup SIGINT SIGTERM ERR EXIT
 
@@ -24,10 +26,10 @@ semicolon for pt-secure-collect to work properly.
 
 Available options:
 
+-d, --debug        Print script debug info
 -h, --help         Print this help and exit
 -i, --input-file   Read the input text file
 -o, --output-file  Write the output to a text file
--v, --verbose      Print script debug info
 EOF
   exit
 }
@@ -48,12 +50,24 @@ msg() {
   echo >&2 -e "${1-}"
 }
 
+version() {
+  msg "${0}"
+  msg "Version ${version}"
+  msg "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>."
+  msg "This is free software: you are free to change and redistribute it."
+  msg "There is NO WARRANTY, to the extent permitted by law."
+  msg "Written by Michael Patrick."
+  exit 0
+}
+
 die() {
   local msg=$1
   local code=${2-1} # default exit status 1
   msg "$msg"
   setup_colors
-  debug
+  if [ "$show_debug" = true ]; then
+    debug
+  fi
   exit "$code"
 }
 
@@ -68,11 +82,12 @@ parse_params() {
   # default values of variables set from params
   input_file=''
   output_file=''
+  show_debug=false
 
   while :; do
     case "${1-}" in
     -h | --help) usage ;;
-    -v | --verbose) set -x ;;
+    -d | --debug) show_debug=true; set -x ;;
     --no-color) NO_COLOR=1 ;;
     -i | --input-file)
       input_file="${2-}"
@@ -82,6 +97,7 @@ parse_params() {
       output_file="${2-}"
       shift
       ;;
+    -v | --version) version ;;
     -?*) die "Unknown option: $1" ;;
     *) break ;;
     esac
@@ -102,12 +118,12 @@ setup_colors
 
 # check whether input file exists
 if [ ! -f ${input_file} ]; then
-  die "Input file, ${input_file}, does not exist!"
+  die "${RED}Input file, ${input_file}, does not exist!"
 fi
 
 # check whether pt-secure-collect command exists
 if ! command -v pt-secure-collect &> /dev/null; then
-  die "The utility, pt-secure-collect, was not found.  Please install the latest version of the Percona Toolkit."
+  die "${RED}The utility, pt-secure-collect, was not found.  Please install the latest version of the Percona Toolkit."
 fi
 
 # perform replace operation
