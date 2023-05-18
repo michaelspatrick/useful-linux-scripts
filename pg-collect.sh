@@ -9,7 +9,10 @@
 PG_USER="postgres"
 PG_PASSWORD="password"
 PG_DBNAME="postgres"
-PSQL_CONNECT_STR="sudo -i -u postgres psql -d ${PG_DBNAME}"
+PSQL_CONNECT_STR="psql -U${PG_USER} -d ${PG_DBNAME}"
+
+# Set postgres password in the environment
+export PGPASSWORD="${PG_PASSWORD}"
 
 # Setup directory paths
 TMPDIR=/tmp
@@ -79,12 +82,12 @@ else
 fi
 
 # Collect Postgres summary info using Percona Toolkit (if available)
-echo -n "Collecting pt-pg-summary: "
+echo "Collecting pt-pg-summary: "
 if ! exists pt-pg-summary; then
   msg "${RED}error - Percona Toolkit not found${NOFORMAT}"
   #exit 1
 else
-  sudo pt-pg-summary -- --user=${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
+  pt-pg-summary -U ${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
   if [ $? -eq 0 ]; then
     msg "${GREEN}done${NOFORMAT}"
   else
@@ -92,42 +95,14 @@ else
   fi
 fi
 
-# Confirm the logging is being done to a file:
-echo -n "Determining log destination: "
-LOG_DESTINATION=`${PSQL_CONNECT_STR} -AXqtc "SHOW log_destination;"`
-if [ $? -eq 0 ]; then
-  echo ${LOG_DESTINATION} > ${PTDEST}/log_destination.txt
-  msg "${GREEN}done${NOFORMAT}"
-else
-  msg "${RED}failed${NOFORMAT}"
-fi
-
-echo -n "Determining log directory: "
-LOG_DIRECTORY=`${PSQL_CONNECT_STR} -AXqtc "SHOW log_directory;"`
-if [ $? -eq 0 ]; then
-  echo ${LOG_DIRECTORY} > ${PTDEST}/log_directory.txt
-  msg "${GREEN}done${NOFORMAT}"
-else
-  msg "${RED}failed${NOFORMAT}"
-fi
-
-# of the PostgreSQL data directory:
-echo -n "Determining data directory: "
-DATA_DIRECTORY=`${PSQL_CONNECT_STR} -AXqtc "SHOW data_directory;"`
-if [ $? -eq 0 ]; then
-  echo ${DATA_DIRECTORY} > ${PTDEST}/data_directory.txt
-  msg "${GREEN}done${NOFORMAT}"
-else
-  msg "${RED}failed${NOFORMAT}"
-fi
-
-# Copy messages or syslog
+# Copy messages (if exists)
 if [ -e /var/log/messages ]; then
   echo -n "Copying /var/log/messages: "
   cp /var/log/messages ${PTDEST}/
   msg "${GREEN}done${NOFORMAT}"
 fi
 
+# Copy syslog (if exists)
 if [ -e /var/log/syslog ]; then
   echo -n "Copying /var/log/syslog: "
   cp /var/log/syslog ${PTDEST}/
@@ -180,7 +155,7 @@ fi
 # lv/pv/vg only for systems with LVM
 echo -n "Collecting lvdisplay: "
 if exists lvdisplay; then
-  sudo lvdisplay --all --maps > ${PTDEST}/lvdisplau-all-maps.txt
+  sudo lvdisplay --all --maps > ${PTDEST}/lvdisplay-all-maps.txt
   msg "${GREEN}done${NOFORMAT}"
 else
   msg "${YELLOW}skipped${NOFORMAT}"
