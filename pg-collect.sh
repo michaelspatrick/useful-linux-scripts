@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 #
-#  Script collects numerous metrics for PostgreSQL and compresses them into a single archive file.
+#  Script collects numerous metrics for PostgreSQL and the Operating System.
+#  It then compresses all the data into a single archive file which can then
+#  be shared with Support.  Script is based upon Percona KB0010933 with a
+#  number of enhancements.
+#
 #  Written by Michael Patrick (michael.patrick@percona.com)
+#  Version 0.1 - May 18, 2023
+#
+#  It is recommended to run the script as a privileged user (superuser,
+#  rds_superuser etc) or some account with pg_monitor privilege.  You can
+#  safely ignore any warnings.
+#
+#  Percona toolkit is highly recommended to be installed and available.  If
+#  not the script, will still continue gracefully, but some key metrics will
+#  be missing.
+#
+#  Modify the Postgres connectivity section below and then you should be able
+#  to run the script.  You should execute it with sudo as follows:
+#  sudo ./pg-collect.sh
+#
 #  Use at your own risk!
 #
 
@@ -23,7 +41,7 @@ DIRNAME="${HOSTNAME}-${DATETIME}"
 CURRENTDIR=`pwd`
 PTDEST=${BASEDIR}/${DIRNAME}
 
-#set -Eeuo pipefail
+# Trap ctrl-c interrupts
 trap cleanup SIGINT
 
 # Display output messages with color
@@ -99,6 +117,7 @@ fi
 if [ -e /var/log/messages ]; then
   echo -n "Copying /var/log/messages: "
   cp /var/log/messages ${PTDEST}/
+  #tail -n 1000 /var/log/messages > ${PTDEST}/messages
   msg "${GREEN}done${NOFORMAT}"
 fi
 
@@ -106,6 +125,7 @@ fi
 if [ -e /var/log/syslog ]; then
   echo -n "Copying /var/log/syslog: "
   cp /var/log/syslog ${PTDEST}/
+  #tail -n 1000 /var/log/syslog > ${PTDEST}/syslog
   msg "${GREEN}done${NOFORMAT}"
 fi
 
@@ -116,6 +136,9 @@ msg "${GREEN}done${NOFORMAT}"
 
 # Get the Postgres gather SQL script and run it
 echo -n "Downloading gather.sql: "
+# For version 9.6.x
+#curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather_old.sql
+# For version 10.0 and up
 curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather.sql
 sudo mv gather.sql ${TMPDIR}
 msg "${GREEN}done${NOFORMAT}"
