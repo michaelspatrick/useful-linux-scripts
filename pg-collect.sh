@@ -2,7 +2,7 @@
 #
 #  Script collects numerous metrics for PostgreSQL and the Operating System.
 #  It then compresses all the data into a single archive file which can then
-#  be shared with Support.  Script is based upon Percona KB0010933 with a
+#  be shared with Support.  Script is based upon Percona KB0010933 with a 
 #  number of enhancements.
 #
 #  Written by Michael Patrick (michael.patrick@percona.com)
@@ -76,6 +76,10 @@ else
   NOFORMAT='' RED='' GREEN='' ORANGE='' BLUE='' PURPLE='' CYAN='' YELLOW=''
 fi
 
+heading() {
+  msg "${ORANGE}${1}${NOFORMAT}"
+}
+
 # Check to ensure running as root
 if [ "$EUID" -ne 0 ]; then
   msg "${RED}Error: Must be run as root${NOFORMAT}"
@@ -84,6 +88,12 @@ fi
 
 # Create the working directory
 mkdir -p ${PTDEST}
+
+heading "Note"
+echo "Beginning script execution.  This could take a few minutes to complete..."
+
+echo
+heading "Operating System"
 
 # Collect summary info using Percona Toolkit (if available)
 echo -n "Collecting pt-summary: "
@@ -99,19 +109,14 @@ else
   fi
 fi
 
-# Collect Postgres summary info using Percona Toolkit (if available)
-echo "Collecting pt-pg-summary: "
-if ! exists pt-pg-summary; then
-  msg "${RED}error - Percona Toolkit not found${NOFORMAT}"
-  #exit 1
-else
-  pt-pg-summary -U ${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
-  if [ $? -eq 0 ]; then
-    msg "${GREEN}done${NOFORMAT}"
-  else
-    msg "${RED}failed${NOFORMAT}"
-  fi
-fi
+# Collect hardware information
+echo -n "Collecting dmesg: "
+sudo dmesg >  ${PTDEST}/dmesg.txt
+sudo dmesg -T >  ${PTDEST}/dmesg_t.txt
+msg "${GREEN}done${NOFORMAT}"
+
+echo
+heading "Logging"
 
 # Copy messages (if exists)
 if [ -e /var/log/messages ]; then
@@ -134,30 +139,26 @@ echo -n "Collecting journalctl: "
 journalctl -e > ${PTDEST}/journalctl.txt
 msg "${GREEN}done${NOFORMAT}"
 
-# Get the Postgres gather SQL script and run it
-echo -n "Downloading gather.sql: "
-# For version 9.6.x
-#curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather_old.sql
-# For version 10.0 and up
-curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather.sql
-sudo mv gather.sql ${TMPDIR}
-msg "${GREEN}done${NOFORMAT}"
-echo -n "Executing gather.sql: "
-${PSQL_CONNECT_STR} -X -f ${TMPDIR}/gather.sql > ${PTDEST}/psql_gather.txt
-if [ $? -eq 0 ]; then
-  msg "${GREEN}done${NOFORMAT}"
-else
-  msg "${RED}failed${NOFORMAT}"
-fi
+echo
+heading "Resource Limits"
 
-# Collect hardware information
-echo -n "Collecting dmesg: "
-sudo dmesg >  ${PTDEST}/dmesg.txt
-sudo dmesg -T >  ${PTDEST}/dmesg_t.txt
-msg "${GREEN}done${NOFORMAT}"
+# Ulimit
 echo -n "Collecting ulimit: "
 ulimit -a > ${PTDEST}/ulimit_a.txt
 msg "${GREEN}done${NOFORMAT}"
+
+echo
+heading "Swapping"
+
+# Swappiness
+echo -n "Collecting swappiness: "
+sudo cat /proc/sys/vm/swappiness > ${PTDEST}/swappiness.txt
+msg "${GREEN}done${NOFORMAT}"
+
+echo
+heading "NUMA"
+
+# Numactl
 echo -n "Collecting numactl: "
 if exists numactl; then
   sudo numactl --hardware  >  ${PTDEST}/numactl-hardware.txt
@@ -166,8 +167,69 @@ else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
 
-# IO related
+echo
+heading "CPU"
+
+# cpuinfo
+echo -n "Collecting CPU info: "
+sudo cat /proc/cpuinfo > ${PTDEST}/cpuinfo.txt
+msg "${GREEN}done${NOFORMAT}"
+
+# mpstat
+echo -n "Collecting mpstat (60 sec): "
+if exists mpstat; then
+  sudo mpstat -A 1 60 > ${PTDEST}/mpstat.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+echo
+heading "Memory"
+
+# meminfo
+echo -n "Collecting meminfo: "
+sudo cat /proc/meminfo > ${PTDEST}/meminfo.txt
+msg "${GREEN}done${NOFORMAT}"
+
+# Memory
+echo -n "Collecting free/used memory: "
+sudo free -m > ${PTDEST}/memory.txt
+msg "${GREEN}done${NOFORMAT}"
+
+# vmstat
+echo -n "Collecting vmstat (60 sec): "
+if exists vmstat; then
+  sudo vmstat 1 60 > ${PTDEST}/vmstat.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+
+echo
+heading "Storage"
+
+# Disk info
+echo -n "Collecting df: "
+if exists df; then
+  sudo df -k > ${PTDEST}/df_k.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+# Block devices
 echo -n "Collecting lsblk: "
+if exists lsblk; then
+  sudo lsblk -o KNAME,SCHED,SIZE,TYPE,ROTA > ${PTDEST}/lsblk.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+# lsblk
+echo -n "Collecting lsblk (all): "
 if exists lsblk; then
   sudo lsblk --all > ${PTDEST}/lsblk-all.txt
   msg "${GREEN}done${NOFORMAT}"
@@ -175,7 +237,7 @@ else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
 
-# lv/pv/vg only for systems with LVM
+# lvdisplay (only for systems with LVM)
 echo -n "Collecting lvdisplay: "
 if exists lvdisplay; then
   sudo lvdisplay --all --maps > ${PTDEST}/lvdisplay-all-maps.txt
@@ -183,6 +245,8 @@ if exists lvdisplay; then
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
+
+# pvdisplay (only for systems with LVM)
 echo -n "Collecting pvdisplay: "
 if exists pvdisplay; then
   sudo pvdisplay --maps > ${PTDEST}/pvdisplay-maps.txt
@@ -190,6 +254,8 @@ if exists pvdisplay; then
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
+
+# pvs (only for systems with LVM)
 echo -n "Collecting pvs: "
 if exists pvs; then
   sudo pvs -v > ${PTDEST}/pvs_v.txt
@@ -197,6 +263,8 @@ if exists pvs; then
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
+
+# vgdisplay (only for systems with LVM)
 echo -n "Collecting vgdisplay: "
 if exists vgdisplay; then
   sudo vgdisplay > ${PTDEST}/vgdisplay.txt
@@ -213,13 +281,62 @@ if exists nfsstat; then
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
+
+echo
+heading "I/O"
+
+# iostat
+echo -n "Collecting iostat (60 sec): "
+if exists iostat; then
+  sudo iostat -dmx 1 60 > ${PTDEST}/mpstat.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
 echo -n "Collecting nfsiostat: "
-if exists fsiostat; then
+if exists nfsiostat; then
   sudo nfsiostat 1 120 > ${PTDEST}/nfsiostat.txt
   msg "${GREEN}done${NOFORMAT}"
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
+
+echo
+heading "PostgreSQL"
+
+# Collect Postgres summary info using Percona Toolkit (if available)
+echo "Collecting pt-pg-summary: "
+if ! exists pt-pg-summary; then
+  msg "${RED}error - Percona Toolkit not found${NOFORMAT}"
+  #exit 1
+else
+  pt-pg-summary -U ${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
+  if [ $? -eq 0 ]; then
+    msg "${GREEN}done${NOFORMAT}"
+  else
+    msg "${RED}failed${NOFORMAT}"
+  fi
+fi
+
+# Get the Postgres gather SQL script and run it
+echo -n "Downloading gather.sql: "
+# For version 9.6.x
+#curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather_old.sql
+# For version 10.0 and up
+curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather.sql
+sudo mv gather.sql ${TMPDIR}
+msg "${GREEN}done${NOFORMAT}"
+echo -n "Executing gather.sql: "
+${PSQL_CONNECT_STR} -X -f ${TMPDIR}/gather.sql > ${PTDEST}/psql_gather.txt
+if [ $? -eq 0 ]; then
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${RED}failed${NOFORMAT}"
+fi
+
+echo
+heading "Preparing Data Archive"
 
 # Compress files for sending to Percona
 cd ${BASEDIR}
