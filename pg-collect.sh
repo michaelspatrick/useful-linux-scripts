@@ -313,7 +313,7 @@ heading "I/O"
 # iostat
 echo -n "Collecting iostat (60 sec): "
 if exists iostat; then
-  sudo iostat -dmx 1 60 > ${PTDEST}/mpstat.txt
+  sudo iostat -dmx 1 60 > ${PTDEST}/iostat.txt
   msg "${GREEN}done${NOFORMAT}"
 else
   msg "${YELLOW}skipped${NOFORMAT}"
