@@ -31,6 +31,8 @@
 # Use at your own risk!
 #
 
+VERSION=0.1
+
 # Postgres connectivity
 PG_USER="postgres"
 PG_PASSWORD="password"
@@ -97,8 +99,9 @@ fi
 # Create the working directory
 mkdir -p ${PTDEST}
 
-heading "Note"
-echo "Beginning script execution.  This could take a few minutes to complete..."
+heading "Notes"
+echo "PostgreSQL Data Collection Script v${VERSION}"
+echo "Beginning script execution.  Please allow a few minutes to complete..."
 
 echo
 heading "Operating System"
@@ -117,15 +120,25 @@ else
   fi
 fi
 
-# Collect OS information
-echo -n "Collecting uname: "
-sudo uname -a >  ${PTDEST}/uname_a.txt
+# Collect process information
+echo -n "Collecting process info: "
+ps auxf > ${PTDEST}/ps_auxf.txt
 msg "${GREEN}done${NOFORMAT}"
 
-# Collect hardware information
+# Collect process information
+echo -n "Collecting top: "
+top -n 1 > ${PTDEST}/top.txt
+msg "${GREEN}done${NOFORMAT}"
+
+# Collect OS information
+echo -n "Collecting uname: "
+sudo uname -a > ${PTDEST}/uname_a.txt
+msg "${GREEN}done${NOFORMAT}"
+
+# Collect kernel information
 echo -n "Collecting dmesg: "
-sudo dmesg >  ${PTDEST}/dmesg.txt
-sudo dmesg -T >  ${PTDEST}/dmesg_t.txt
+sudo dmesg > ${PTDEST}/dmesg.txt
+sudo dmesg -T > ${PTDEST}/dmesg_t.txt
 msg "${GREEN}done${NOFORMAT}"
 
 echo
@@ -174,7 +187,7 @@ heading "NUMA"
 # Numactl
 echo -n "Collecting numactl: "
 if exists numactl; then
-  sudo numactl --hardware  >  ${PTDEST}/numactl-hardware.txt
+  sudo numactl --hardware > ${PTDEST}/numactl-hardware.txt
   msg "${GREEN}done${NOFORMAT}"
 else
   msg "${YELLOW}skipped${NOFORMAT}"
@@ -339,7 +352,7 @@ echo -n "Downloading gather.sql: "
 curl -sLO https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/gather.sql
 sudo mv gather.sql ${TMPDIR}
 msg "${GREEN}done${NOFORMAT}"
-echo -n "Executing gather.sql: "
+echo -n "Executing gather.sql (40+ sec): "
 ${PSQL_CONNECT_STR} -X -f ${TMPDIR}/gather.sql > ${PTDEST}/psql_gather.txt
 if [ $? -eq 0 ]; then
   msg "${GREEN}done${NOFORMAT}"
