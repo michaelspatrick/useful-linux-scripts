@@ -1,26 +1,34 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
-#  Script collects numerous metrics for PostgreSQL and the Operating System.
-#  It then compresses all the data into a single archive file which can then
-#  be shared with Support.  Script is based upon Percona KB0010933 with a 
-#  number of enhancements.
+# Script collects numerous metrics for PostgreSQL and the Operating System.
+# It then compresses all the data into a single archive file which can then
+# be shared with Support.  Script is based upon Percona KB0010933 with a
+# number of enhancements.
 #
-#  Written by Michael Patrick (michael.patrick@percona.com)
-#  Version 0.1 - May 18, 2023
+# Written by Michael Patrick (michael.patrick@percona.com)
+# Version 0.1 - May 18, 2023
 #
-#  It is recommended to run the script as a privileged user (superuser,
-#  rds_superuser etc) or some account with pg_monitor privilege.  You can
-#  safely ignore any warnings.
+# It is recommended to run the script as a privileged user (superuser,
+# rds_superuser etc) or some account with pg_monitor privilege.  You can
+# safely ignore any warnings.
 #
-#  Percona toolkit is highly recommended to be installed and available.  If
-#  not the script, will still continue gracefully, but some key metrics will
-#  be missing.
+# Percona toolkit is highly recommended to be installed and available.  If
+# not the script, will still continue gracefully, but some key metrics will
+# be missing.
 #
-#  Modify the Postgres connectivity section below and then you should be able
-#  to run the script.  You should execute it with sudo as follows:
-#  sudo ./pg-collect.sh
+# By default, the script expects you are running PostgreSQL 10 and beyond.
+# If you need to use an older version, you can change the gather.sql script
+# line to gather_old.sql.
 #
-#  Use at your own risk!
+# This script also gathers either /var/log/syslog or /var/log/messages.
+# There are commented lines if you would prefer to only grab something like
+# the last 1,000 lines from the log instead.
+#
+# Modify the Postgres connectivity section below and then you should be able
+# to run the script.  You should execute it with sudo as follows:
+# sudo ./pg-collect.sh
+#
+# Use at your own risk!
 #
 
 # Postgres connectivity
@@ -109,6 +117,11 @@ else
   fi
 fi
 
+# Collect OS information
+echo -n "Collecting uname: "
+sudo uname -a >  ${PTDEST}/uname_a.txt
+msg "${GREEN}done${NOFORMAT}"
+
 # Collect hardware information
 echo -n "Collecting dmesg: "
 sudo dmesg >  ${PTDEST}/dmesg.txt
@@ -194,7 +207,7 @@ msg "${GREEN}done${NOFORMAT}"
 
 # Memory
 echo -n "Collecting free/used memory: "
-sudo free -m > ${PTDEST}/memory.txt
+sudo free -m > ${PTDEST}/free_m.txt
 msg "${GREEN}done${NOFORMAT}"
 
 # vmstat
@@ -205,7 +218,6 @@ if exists vmstat; then
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
-
 
 echo
 heading "Storage"
