@@ -17,14 +17,10 @@
 # be missing.
 #
 # This script also gathers either /var/log/syslog or /var/log/messages.
-# There are commented lines if you would prefer to only grab something like
-# the last 1,000 lines from the log instead.
+# It will collect the last 1,000 lines from the log by default.
 #
 # Modify the Postgres connectivity section below and then you should be able
 # to run the script.
-#
-# If you run it with sudo or as root, you will get more metrics but it should
-# execute just fine without sudo.
 #
 # Use at your own risk!
 #
