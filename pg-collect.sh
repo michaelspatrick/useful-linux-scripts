@@ -49,6 +49,9 @@ DIRNAME="${HOSTNAME}_${DATETIME}"
 CURRENTDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 PTDEST=${BASEDIR}/${DIRNAME}
 
+# Number of log entries to collect
+NUM_LOG_LINES=1000
+
 # Trap ctrl-c interrupts
 trap cleanup SIGINT
 
@@ -97,7 +100,6 @@ Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-V] [-f]
 Script collects various Operating System and PostgreSQL diagnostic information and stores output in an archive file.
 
 Available options:
-
 -h, --help      Print this help and exit
 -v, --verbose   Print script debug info
 -V, --version   Print script version info
@@ -113,6 +115,7 @@ parse_params() {
   param=''
   COLOR=true
   FAST=false
+  CMD_TIME=60
 
   while :; do
     case "${1-}" in
@@ -120,7 +123,7 @@ parse_params() {
     -v | --verbose) set -x ;;
     -V | --version) version ;;
     --no-color) COLOR=false ;;
-    -f | --fast) FAST=true ;;
+    -f | --fast) FAST=true; CMD_TIME=3 ;;
     -?*) die "Unknown option: $1" ;;
     *) break ;;
     esac
@@ -176,15 +179,22 @@ else
   PSQL_EXISTS=false
 fi
 
+# Get the newest Postgres PID
+PG_PID=`pgrep -x postgres -n`
+
+# Get the location of the PG config file
+PG_CONFIG=`$PSQL_CONNECT_STR -t -c 'SHOW config_file' | xargs`
+PG_HBA_CONFIG=`$PSQL_CONNECT_STR -t -c 'SHOW hba_file' | xargs`
+
 heading "Notes"
 echo -n "PostgreSQL Data Collection Version: "
 msg "${GREEN}${VERSION}${NOFORMAT}"
 
 echo -n "Metrics collection speed: "
 if [ "$FAST" = true ]; then
-  msg "${YELLOW}fast${NOFORMAT}"
+  msg "${YELLOW}fast (${CMD_TIME} sec)${NOFORMAT}"
 else
-  msg "${GREEN}slow${NOFORMAT}"
+  msg "${GREEN}slow (${CMD_TIME} sec)${NOFORMAT}"
 fi
 
 echo -n "Percona Toolkit Version: "
@@ -203,6 +213,15 @@ if [ "$HAVE_SUDO" = true ] ; then
 else
   msg "${YELLOW}unprivileged${NOFORMAT}"
 fi
+
+echo -n "Postgres Server PID: "
+msg "${GREEN}${PG_PID}${NOFORMAT}"
+
+echo -n "Postgres Server Configuration File: "
+msg "${CYAN}${PG_CONFIG}${NOFORMAT}"
+
+echo -n "Postgres Client Configuration File: "
+msg "${CYAN}${PG_HBA_CONFIG}${NOFORMAT}"
 
 # Create the working directory
 echo -n "Temporary working directory: "
@@ -232,14 +251,18 @@ else
   fi
 fi
 
-# Collect process information
+echo -n "Collecting sysctl: "
+sysctl -a > ${PTDEST}/sysctl_a.txt 2> /dev/null
+msg "${GREEN}done${NOFORMAT}"
+
+# Collect ps
 echo -n "Collecting ps: "
 ps auxf > ${PTDEST}/ps_auxf.txt
 msg "${GREEN}done${NOFORMAT}"
 
-# Collect process information
+# Collect top
 echo -n "Collecting top: "
-top -n 1 > ${PTDEST}/top.txt
+top -bn 1 > ${PTDEST}/top.txt
 msg "${GREEN}done${NOFORMAT}"
 
 # Collect OS information
@@ -262,17 +285,15 @@ heading "Logging"
 
 # Copy messages (if exists)
 if [ -e /var/log/messages ]; then
-  echo -n "Collecting /var/log/messages: "
-  #cp /var/log/messages ${PTDEST}/
-  tail -n 1000 /var/log/messages > ${PTDEST}/messages
+  echo -n "Collecting /var/log/messages (${NUM_LOG_LINES} lines): "
+  tail -n ${NUM_LOG_LINES} /var/log/messages > ${PTDEST}/messages
   msg "${GREEN}done${NOFORMAT}"
 fi
 
 # Copy syslog (if exists)
 if [ -e /var/log/syslog ]; then
-  echo -n "Collecting /var/log/syslog: "
-  #cp /var/log/syslog ${PTDEST}/
-  tail -n 1000 /var/log/syslog > ${PTDEST}/syslog
+  echo -n "Collecting /var/log/syslog (${NUM_LOG_LINES} lines): "
+  tail -n ${NUM_LOG_LINES} /var/log/syslog > ${PTDEST}/syslog
   msg "${GREEN}done${NOFORMAT}"
 fi
 
@@ -318,16 +339,12 @@ cat /proc/cpuinfo > ${PTDEST}/cpuinfo.txt
 msg "${GREEN}done${NOFORMAT}"
 
 # mpstat
-echo -n "Collecting mpstat (60 sec): "
-if [ "$FAST" = false ]; then
-  if exists mpstat; then
-    mpstat -A 1 60 > ${PTDEST}/mpstat.txt
-    msg "${GREEN}done${NOFORMAT}"
-  else
-    msg "${YELLOW}skipped${NOFORMAT}"
-  fi
+echo -n "Collecting mpstat (${CMD_TIME} sec): "
+if exists mpstat; then
+  mpstat -A 1 ${CMD_TIME} > ${PTDEST}/mpstat.txt
+  msg "${GREEN}done${NOFORMAT}"
 else
-  msg "${YELLOW}skipped (fast option chosen)${NOFORMAT}"
+  msg "${YELLOW}skipped${NOFORMAT}"
 fi
 
 echo
@@ -344,16 +361,12 @@ free -m > ${PTDEST}/free_m.txt
 msg "${GREEN}done${NOFORMAT}"
 
 # vmstat
-echo -n "Collecting vmstat (60 sec): "
-if [ "$FAST" = false ]; then
-  if exists vmstat; then
-    vmstat 1 60 > ${PTDEST}/vmstat.txt
-    msg "${GREEN}done${NOFORMAT}"
-  else
-    msg "${YELLOW}skipped${NOFORMAT}"
-  fi
+echo -n "Collecting vmstat (${CMD_TIME} sec): "
+if exists vmstat; then
+  vmstat 1 ${CMD_TIME} > ${PTDEST}/vmstat.txt
+  msg "${GREEN}done${NOFORMAT}"
 else
-  msg "${YELLOW}skipped (fast option chosen)${NOFORMAT}"
+  msg "${YELLOW}skipped${NOFORMAT}"
 fi
 
 echo
@@ -382,6 +395,30 @@ echo -n "Collecting lsblk (all): "
 if exists lsblk; then
   lsblk --all > ${PTDEST}/lsblk-all.txt
   msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+echo -n "Collecting smartctl: "
+if exists smartctl; then
+  if [ "$HAVE_SUDO" = true ] ; then
+    smartctl --scan | awk '{print $1}' | while read device; do { smartctl --xall "${device}"; } done > "${PTDEST}/smartctl.txt"
+    msg "${GREEN}done${NOFORMAT}"
+  else
+    msg "${YELLOW}skipped (insufficient user privileges)${NOFORMAT}"
+  fi
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+echo -n "Collecting multipath: "
+if exists multipath; then
+  if [ "$HAVE_SUDO" = true ] ; then
+    multipath -ll > "${PTDEST}/multipath_ll.txt"
+    msg "${GREEN}done${NOFORMAT}"
+  else
+    msg "${YELLOW}skipped (insufficient user privileges)${NOFORMAT}"
+  fi
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
@@ -451,28 +488,88 @@ echo
 heading "I/O"
 
 # iostat
-echo -n "Collecting iostat (60 sec): "
-if [ "$FAST" = false ]; then
-  if exists iostat; then
-    iostat -dmx 1 60 > ${PTDEST}/iostat.txt
-    msg "${GREEN}done${NOFORMAT}"
-  else
-    msg "${YELLOW}skipped${NOFORMAT}"
-  fi
+echo -n "Collecting iostat (${CMD_TIME} sec): "
+if exists iostat; then
+  iostat -dmx 1 ${CMD_TIME} > ${PTDEST}/iostat.txt
+  msg "${GREEN}done${NOFORMAT}"
 else
-  msg "${YELLOW}skipped (fast option chosen)${NOFORMAT}"
+  msg "${YELLOW}skipped${NOFORMAT}"
 fi
 
-echo -n "Collecting nfsiostat: "
+echo -n "Collecting nfsiostat (${CMD_TIME} sec): "
 if exists nfsiostat; then
-  nfsiostat 1 120 > ${PTDEST}/nfsiostat.txt
+  nfsiostat 1 ${CMD_TIME} > ${PTDEST}/nfsiostat.txt
   msg "${GREEN}done${NOFORMAT}"
 else
   msg "${YELLOW}skipped${NOFORMAT}"
 fi
 
 echo
+heading "Networking"
+
+echo -n "Collecting netstat: "
+if exists netstat; then
+  netstat -s > ${PTDEST}/netstat_s.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+echo -n "Collecting sar (${CMD_TIME} sec): "
+if exists sar; then
+  sar -n DEV 1 ${CMD_TIME} > ${PTDEST}/sar_dev.txt
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${YELLOW}skipped${NOFORMAT}"
+fi
+
+
+echo
 heading "PostgreSQL"
+echo -n "Copying server configuration file: "
+if [ -r "${PG_CONFIG}" ]; then
+  cp ${PG_CONFIG} ${PTDEST}
+  if [ $? -eq 0 ]; then
+    msg "${GREEN}done${NOFORMAT}"
+  else
+    msg "${RED}failed${NOFORMAT}"
+  fi
+else
+  msg "${RED}insufficient read privileges${NOFORMAT}"
+fi
+
+echo -n "Copying client configuration file: "
+if [ -r "${PG_HBA_CONFIG}" ]; then
+  cp ${PG_HBA_CONFIG} ${PTDEST}
+  if [ $? -eq 0 ]; then
+    msg "${GREEN}done${NOFORMAT}"
+  else
+    msg "${RED}failed${NOFORMAT}"
+  fi
+else
+  msg "${RED}insufficient read privileges${NOFORMAT}"
+fi
+
+echo -n "Collecting PIDs: "
+pgrep -x postgres > "${PTDEST}/postgres_PIDs.txt"
+if [ $? -eq 0 ]; then
+  msg "${GREEN}done${NOFORMAT}"
+else
+  msg "${RED}failed${NOFORMAT}"
+fi
+
+echo -n "Copying limits: "
+if [ -r "/proc/${PG_PID}/limits" ]; then
+  cp "/proc/${PG_PID}/limits"  "${PTDEST}/proc_${PG_PID}_limits.txt"
+  if [ $? -eq 0 ]; then
+    msg "${GREEN}done${NOFORMAT}"
+  else
+    msg "${RED}failed${NOFORMAT}"
+  fi
+else
+  msg "${RED}insufficient read privileges${NOFORMAT}"
+fi
+
 
 # Collect Postgres summary info using Percona Toolkit (if available)
 echo "Collecting pt-pg-summary: "
