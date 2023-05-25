@@ -53,7 +53,7 @@ PTDEST=${BASEDIR}/${DIRNAME}
 NUM_LOG_LINES=1000
 
 # Trap ctrl-c interrupts
-trap cleanup SIGINT
+trap die SIGINT
 
 # Display output messages with color
 msg() {
@@ -66,7 +66,8 @@ msg() {
 
 # Cleanup temporary files and working directory
 cleanup() {
-  trap - SIGINT
+  echo
+  heading "Cleanup"
   echo -n "Deleting temporary files: "
   if [ -d "${PTDEST}" ]; then
     rm -rf ${PTDEST}
@@ -87,9 +88,11 @@ version() {
 }
 
 die() {
+  echo
+  cleanup
   local msg=$1
   local code=${2-1} # default exit status 1
-  msg "$msg"
+  #msg "$msg"
   exit "$code"
 }
 
@@ -631,8 +634,6 @@ echo -n "File saved to: "
 msg "${CYAN}${DEST_TGZ}${NOFORMAT}"
 
 # Do Cleanup
-echo
-heading "Cleanup"
 cleanup
 
 exit 0
