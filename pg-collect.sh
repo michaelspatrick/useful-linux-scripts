@@ -46,6 +46,9 @@ DIRNAME="${HOSTNAME}_${DATETIME}"
 CURRENTDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 PTDEST=${BASEDIR}/${DIRNAME}
 
+# Whether to skip attempts to download Percona toolkit and scripts
+SKIP_DOWNLOADS=true
+
 # Number of log entries to collect
 NUM_LOG_LINES=1000
 
@@ -161,7 +164,7 @@ else
 fi
 
 # Get the Percona Toolkit Version
-if exists pt-summary2; then
+if exists pt-summary; then
   PT_EXISTS=true
   PT_SUMMARY=`which pt-summary`
   PT_VERSION_NUM=`${PT_SUMMARY} --version | egrep -o '[0-9]{1,}\.[0-9]{1,}'`
@@ -172,21 +175,25 @@ else
     chmod +x ${PT_SUMMARY}
   else
     echo -n "Warning: Percona Toolkit tool, pg-summary, not found.  Attempting download: "
-    wget -cq -T 5 -P ${TMPDIR} percona.com/get/pt-summary
-    if [ $? -eq 0 ]; then
-      PT_EXISTS=true
-      PT_SUMMARY="${TMPDIR}/pt-summary"
-      chmod +x ${PT_SUMMARY}
-      msg "${GREEN}done${NOFORMAT}"
+    if [ "${SKIP_DOWNLOADS}" = false ]; then
+      wget -cq -T 5 -P ${TMPDIR} percona.com/get/pt-summary
+      if [ $? -eq 0 ]; then
+        PT_EXISTS=true
+        PT_SUMMARY="${TMPDIR}/pt-summary"
+        chmod +x ${PT_SUMMARY}
+        msg "${GREEN}done${NOFORMAT}"
+      else
+        PT_EXISTS=false
+        PT_VERSION_NUM=""
+        msg "${RED}failed${NOFORMAT}"
+      fi
     else
-      PT_EXISTS=false
-      PT_VERSION_NUM=""
-      msg "${RED}failed${NOFORMAT}"
+      msg "${YELLOW}skipped${NOFORMAT}"
     fi
   fi
 fi
 
-if exists pt-pg-summary2; then
+if exists pt-pg-summary; then
   PT_PG_SUMMARY=`which pt-pg-summary`
 else
   if [ -f "${TMPDIR}/pt-pg-summary" ]; then
@@ -195,13 +202,17 @@ else
     chmod +x ${PT_PG_SUMMARY}
   else
     echo -n "Warning: Percona Toolkit tool, pg-pg-summary, not found.  Attempting download: "
-    wget -cq -T 5 -P ${TMPDIR} percona.com/get/pt-pg-summary
-    if [ $? -eq 0 ]; then
-      PT_PG_SUMMARY=${TMPDIR}/pt-pg-summary
-      chmod +x ${PT_PG_SUMMARY}
-      msg "${GREEN}done${NOFORMAT}"
+    if [ "${SKIP_DOWNLOADS}" = false ]; then
+      wget -cq -T 5 -P ${TMPDIR} percona.com/get/pt-pg-summary
+      if [ $? -eq 0 ]; then
+        PT_PG_SUMMARY=${TMPDIR}/pt-pg-summary
+        chmod +x ${PT_PG_SUMMARY}
+        msg "${GREEN}done${NOFORMAT}"
+      else
+        msg "${RED}failed${NOFORMAT}"
+      fi
     else
-      msg "${RED}failed${NOFORMAT}"
+      msg "${YELLOW}skipped${NOFORMAT}"
     fi
   fi
 fi
