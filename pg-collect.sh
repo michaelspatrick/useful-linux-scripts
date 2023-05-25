@@ -534,7 +534,7 @@ if [ -r "${PG_CONFIG}" ]; then
     msg "${RED}failed${NOFORMAT}"
   fi
 else
-  msg "${RED}insufficient read privileges${NOFORMAT}"
+  msg "${YELLOW}skipped - insufficient read privileges${NOFORMAT}"
 fi
 
 echo -n "Copying client configuration file: "
@@ -546,7 +546,7 @@ if [ -r "${PG_HBA_CONFIG}" ]; then
     msg "${RED}failed${NOFORMAT}"
   fi
 else
-  msg "${RED}insufficient read privileges${NOFORMAT}"
+  msg "${YELLOW}skipped - insufficient read privileges${NOFORMAT}"
 fi
 
 echo -n "Collecting PIDs: "
