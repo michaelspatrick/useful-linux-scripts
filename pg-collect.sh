@@ -12,9 +12,10 @@
 # rds_superuser etc), but it will run as any user.  You can safely ignore any
 # warnings.
 #
-# Percona toolkit is highly recommended to be installed and available.  If
-# not the script, will still continue gracefully, but some key metrics will
-# be missing.
+# Percona toolkit is highly recommended to be installed and available.
+# The script will attempt to download only the necessary tools from the Percona
+# website.  If that too fails, it will continue gracefully, but some key metrics
+# will be missing.
 #
 # This script also gathers either /var/log/syslog or /var/log/messages.
 # It will collect the last 1,000 lines from the log by default.
@@ -38,7 +39,7 @@ export PGPASSWORD="${PG_PASSWORD}"
 
 # Setup directory paths
 TMPDIR=/tmp
-BASEDIR=${TMPDIR}/pt
+BASEDIR=${TMPDIR}/metrics
 DATETIME=`date +"%F_%H-%M-%S"`
 HOSTNAME=`hostname`
 DIRNAME="${HOSTNAME}_${DATETIME}"
@@ -115,6 +116,7 @@ parse_params() {
   COLOR=true
   FAST=false
   CMD_TIME=60
+  CMD_SHORT_TIME=3
 
   while :; do
     case "${1-}" in
@@ -122,7 +124,7 @@ parse_params() {
     -v | --verbose) set -x ;;
     -V | --version) version ;;
     --no-color) COLOR=false ;;
-    -f | --fast) FAST=true; CMD_TIME=3 ;;
+    -f | --fast) FAST=true; CMD_TIME=${CMD_SHORT_TIME} ;;
     -?*) die "Unknown option: $1" ;;
     *) break ;;
     esac
@@ -159,12 +161,49 @@ else
 fi
 
 # Get the Percona Toolkit Version
-if exists pt-summary; then
+if exists pt-summary2; then
   PT_EXISTS=true
-  PT_VERSION_NUM=`pt-summary --version | egrep -o '[0-9]{1,}\.[0-9]{1,}'`
+  PT_SUMMARY=`which pt-summary`
+  PT_VERSION_NUM=`${PT_SUMMARY} --version | egrep -o '[0-9]{1,}\.[0-9]{1,}'`
 else
-  PT_EXISTS=false
-  PT_VERSION_NUM=""
+  if [ -f "${TMPDIR}/pt-summary" ]; then
+    PT_EXISTS=true
+    PT_SUMMARY=${TMPDIR}/pt-summary
+    chmod +x ${PT_SUMMARY}
+  else
+    echo -n "Warning: Percona Toolkit tool, pg-summary, not found.  Attempting download: "
+    wget -cq -T 5 -P ${TMPDIR} percona.com/get/pt-summary
+    if [ $? -eq 0 ]; then
+      PT_EXISTS=true
+      PT_SUMMARY="${TMPDIR}/pt-summary"
+      chmod +x ${PT_SUMMARY}
+      msg "${GREEN}done${NOFORMAT}"
+    else
+      PT_EXISTS=false
+      PT_VERSION_NUM=""
+      msg "${RED}failed${NOFORMAT}"
+    fi
+  fi
+fi
+
+if exists pt-pg-summary2; then
+  PT_PG_SUMMARY=`which pt-pg-summary`
+else
+  if [ -f "${TMPDIR}/pt-pg-summary" ]; then
+    PT_EXISTS=true
+    PT_PG_SUMMARY="${TMPDIR}/pt-pg-summary"
+    chmod +x ${PT_PG_SUMMARY}
+  else
+    echo -n "Warning: Percona Toolkit tool, pg-pg-summary, not found.  Attempting download: "
+    wget -cq -T 5 -P ${TMPDIR} percona.com/get/pt-pg-summary
+    if [ $? -eq 0 ]; then
+      PT_PG_SUMMARY=${TMPDIR}/pt-pg-summary
+      chmod +x ${PT_PG_SUMMARY}
+      msg "${GREEN}done${NOFORMAT}"
+    else
+      msg "${RED}failed${NOFORMAT}"
+    fi
+  fi
 fi
 
 # Get the Postgres Version
@@ -213,7 +252,7 @@ else
   msg "${YELLOW}unprivileged${NOFORMAT}"
 fi
 
-echo -n "Postgres Server PID: "
+echo -n "Postgres Server PID (Latest): "
 msg "${GREEN}${PG_PID}${NOFORMAT}"
 
 echo -n "Postgres Server Configuration File: "
@@ -222,9 +261,13 @@ msg "${CYAN}${PG_CONFIG}${NOFORMAT}"
 echo -n "Postgres Client Configuration File: "
 msg "${CYAN}${PG_HBA_CONFIG}${NOFORMAT}"
 
+echo -n "Base working directory: "
+msg "${CYAN}${BASEDIR}${NOFORMAT}"
+
 # Create the working directory
 echo -n "Temporary working directory: "
 msg "${CYAN}${PTDEST}${NOFORMAT}"
+
 echo -n "Creating temporary directory: "
 mkdir -p ${PTDEST}
 if [ $? -eq 0 ]; then
@@ -569,14 +612,13 @@ else
   msg "${RED}insufficient read privileges${NOFORMAT}"
 fi
 
-
 # Collect Postgres summary info using Percona Toolkit (if available)
 echo "Collecting pt-pg-summary: "
-if ! exists pt-pg-summary; then
+if ! exists ${PT_PG_SUMMARY}; then
   msg "${RED}error - Percona Toolkit not found${NOFORMAT}"
   #exit 1
 else
-  pt-pg-summary -U ${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
+  ${PT_PG_SUMMARY} -U ${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
   if [ $? -eq 0 ]; then
     msg "${GREEN}done${NOFORMAT}"
   else
