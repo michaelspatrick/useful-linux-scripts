@@ -284,14 +284,14 @@ heading "Logging"
 
 # Copy messages (if exists)
 if [ -e /var/log/messages ]; then
-  echo -n "Collecting /var/log/messages (${NUM_LOG_LINES} lines): "
+  echo -n "Collecting /var/log/messages (up to ${NUM_LOG_LINES} lines): "
   tail -n ${NUM_LOG_LINES} /var/log/messages > ${PTDEST}/messages
   msg "${GREEN}done${NOFORMAT}"
 fi
 
 # Copy syslog (if exists)
 if [ -e /var/log/syslog ]; then
-  echo -n "Collecting /var/log/syslog (${NUM_LOG_LINES} lines): "
+  echo -n "Collecting /var/log/syslog (up to ${NUM_LOG_LINES} lines): "
   tail -n ${NUM_LOG_LINES} /var/log/syslog > ${PTDEST}/syslog
   msg "${GREEN}done${NOFORMAT}"
 fi
