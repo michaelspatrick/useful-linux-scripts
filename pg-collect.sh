@@ -15,7 +15,7 @@
 # Percona toolkit is highly recommended to be installed and available.
 # The script will attempt to download only the necessary tools from the Percona
 # website.  If that too fails, it will continue gracefully, but some key metrics
-# will be missing.
+# will be missing.  This can also be skipped by the --skip-downloads flag.
 #
 # This script also gathers either /var/log/syslog or /var/log/messages.
 # It will collect the last 1,000 lines from the log by default.
@@ -46,14 +46,18 @@ DIRNAME="${HOSTNAME}_${DATETIME}"
 CURRENTDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 PTDEST=${BASEDIR}/${DIRNAME}
 
-# Whether to skip attempts to download Percona toolkit and scripts
-SKIP_DOWNLOADS=true
-
 # Number of log entries to collect
 NUM_LOG_LINES=1000
 
 # Trap ctrl-c interrupts
 trap die SIGINT
+
+# Setup colors
+if [[ -t 2 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
+  NOFORMAT='\033[0m' RED='\033[0;31m' GREEN='\033[0;32m' ORANGE='\033[0;33m' BLUE='\033[0;34m' PURPLE='\033[0;35m' CYAN='\033[0;36m' YELLOW='\033[1;33m'
+else
+  NOFORMAT='' RED='' GREEN='' ORANGE='' BLUE='' PURPLE='' CYAN='' YELLOW=''
+fi
 
 # Display output messages with color
 msg() {
@@ -62,6 +66,22 @@ msg() {
   else
     echo >&2 "${1-}"
   fi
+}
+
+# Check that a command exists
+exists() {
+  command -v "$1" >/dev/null 2>&1 ;
+}
+
+# Get the script version number
+version() {
+  echo "Version ${VERSION}"
+  exit
+}
+
+# Display a colored heading
+heading() {
+  msg "${PURPLE}${1}${NOFORMAT}"
 }
 
 # Cleanup temporary files and working directory
@@ -77,22 +97,12 @@ cleanup() {
   fi
 }
 
-# Check that a command exists
-exists() {
-  command -v "$1" >/dev/null 2>&1 ;
-}
-
-version() {
-  echo "Version ${VERSION}"
-  exit
-}
-
 die() {
   echo
   cleanup
   local msg=$1
   local code=${2-1} # default exit status 1
-  #msg "$msg"
+  msg "$msg"
   exit "$code"
 }
 
@@ -103,23 +113,23 @@ Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-V] [-f]
 Script collects various Operating System and PostgreSQL diagnostic information and stores output in an archive file.
 
 Available options:
--h, --help      Print this help and exit
--v, --verbose   Print script debug info
--V, --version   Print script version info
--f, --fast      When enabled, will not run OS commands which take over 60 seconds each
---no-color      Do not display colors
+-h, --help        Print this help and exit
+-v, --verbose     Print script debug info
+-V, --version     Print script version info
+-f, --fast        When enabled, will not run OS commands which take over 60 seconds each
+--no-color        Do not display colors
+--skip-downloads  Do not attempt to download any Percona tools
 EOF
   exit
 }
 
 parse_params() {
   # default values of variables set from params
-  flag=0
-  param=''
-  COLOR=true
-  FAST=false
-  CMD_TIME=60
-  CMD_SHORT_TIME=3
+  COLOR=true             # Whether or not to show colored output
+  FAST=false             # Whether or not to run fast or slow (with more detail)
+  CMD_TIME=60            # Longer running cmd execution time
+  CMD_SHORT_TIME=3       # Shorter running cmd execution time
+  SKIP_DOWNLOADS=false   # Whether to skip attempts to download Percona toolkit and scripts
 
   while :; do
     case "${1-}" in
@@ -127,9 +137,10 @@ parse_params() {
     -v | --verbose) set -x ;;
     -V | --version) version ;;
     --no-color) COLOR=false ;;
+    --skip-downloads) SKIP_DOWNLOADS=true ;;
     -f | --fast) FAST=true; CMD_TIME=${CMD_SHORT_TIME} ;;
     -?*) die "Unknown option: $1" ;;
-    *) break ;;
+    *) break; die ;;
     esac
     shift
   done
@@ -141,26 +152,27 @@ parse_params() {
 
 parse_params "$@"
 
-# Setup colors
-if [ "$COLOR" = true ]; then
-  if [[ -t 2 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
-    NOFORMAT='\033[0m' RED='\033[0;31m' GREEN='\033[0;32m' ORANGE='\033[0;33m' BLUE='\033[0;34m' PURPLE='\033[0;35m' CYAN='\033[0;36m' YELLOW='\033[1;33m'
-  else
-    NOFORMAT='' RED='' GREEN='' ORANGE='' BLUE='' PURPLE='' CYAN='' YELLOW=''
-  fi
-else
+if [ "$COLOR" = false ]; then
   NOFORMAT='' RED='' GREEN='' ORANGE='' BLUE='' PURPLE='' CYAN='' YELLOW=''
 fi
-
-heading() {
-  msg "${PURPLE}${1}${NOFORMAT}"
-}
 
 # Check to ensure running as root
 if [ "$EUID" -ne 0 ]; then
   HAVE_SUDO=false
 else
   HAVE_SUDO=true
+fi
+
+heading "Notes"
+
+echo -n "PostgreSQL Data Collection Version: "
+msg "${GREEN}${VERSION}${NOFORMAT}"
+
+echo -n "Metrics collection speed: "
+if [ "$FAST" = true ]; then
+  msg "${YELLOW}fast (${CMD_TIME} sec)${NOFORMAT}"
+else
+  msg "${GREEN}slow (${CMD_TIME} sec)${NOFORMAT}"
 fi
 
 # Get the Percona Toolkit Version
@@ -173,6 +185,7 @@ else
     PT_EXISTS=true
     PT_SUMMARY=${TMPDIR}/pt-summary
     chmod +x ${PT_SUMMARY}
+    PT_VERSION_NUM=`${PT_SUMMARY} --version | egrep -o '[0-9]{1,}\.[0-9]{1,}'`
   else
     echo -n "Warning: Percona Toolkit tool, pg-summary, not found.  Attempting download: "
     if [ "${SKIP_DOWNLOADS}" = false ]; then
@@ -181,6 +194,7 @@ else
         PT_EXISTS=true
         PT_SUMMARY="${TMPDIR}/pt-summary"
         chmod +x ${PT_SUMMARY}
+        PT_VERSION_NUM=`${PT_SUMMARY} --version | egrep -o '[0-9]{1,}\.[0-9]{1,}'`
         msg "${GREEN}done${NOFORMAT}"
       else
         PT_EXISTS=false
@@ -188,7 +202,7 @@ else
         msg "${RED}failed${NOFORMAT}"
       fi
     else
-      msg "${YELLOW}skipped${NOFORMAT}"
+      msg "${YELLOW}skipped (per user request)${NOFORMAT}"
     fi
   fi
 fi
@@ -212,7 +226,7 @@ else
         msg "${RED}failed${NOFORMAT}"
       fi
     else
-      msg "${YELLOW}skipped${NOFORMAT}"
+      msg "${YELLOW}skipped (per user request)${NOFORMAT}"
     fi
   fi
 fi
@@ -235,22 +249,18 @@ PG_PID=`pgrep -x postgres -n`
 PG_CONFIG=`$PSQL_CONNECT_STR -t -c 'SHOW config_file' | xargs`
 PG_HBA_CONFIG=`$PSQL_CONNECT_STR -t -c 'SHOW hba_file' | xargs`
 
-heading "Notes"
-echo -n "PostgreSQL Data Collection Version: "
-msg "${GREEN}${VERSION}${NOFORMAT}"
-
-echo -n "Metrics collection speed: "
-if [ "$FAST" = true ]; then
-  msg "${YELLOW}fast (${CMD_TIME} sec)${NOFORMAT}"
-else
-  msg "${GREEN}slow (${CMD_TIME} sec)${NOFORMAT}"
-fi
-
 echo -n "Percona Toolkit Version: "
 if [ "$PT_EXISTS" = true ]; then
   msg "${GREEN}${PT_VERSION_NUM}${NOFORMAT}"
 else
   msg "${YELLOW}not found${NOFORMAT}"
+fi
+
+echo -n "Attempt download of Percona toolkit (if needed): "
+if [ "$SKIP_DOWNLOADS" = false ]; then
+  msg "${GREEN}yes${NOFORMAT}"
+else
+  msg "${YELLOW}no${NOFORMAT}"
 fi
 
 echo -n "Postgres Version: "
@@ -293,10 +303,10 @@ heading "Operating System"
 
 # Collect summary info using Percona Toolkit (if available)
 echo -n "Collecting pt-summary: "
-if ! exists pt-summary; then
+if ! exists $PT_SUMMARY; then
   msg "${ORANGE}warning - Percona Toolkit not found${NOFORMAT}"
 else
-  pt-summary > ${PTDEST}/pt-summary.txt
+  $PT_SUMMARY > ${PTDEST}/pt-summary.txt
   if [ $? -eq 0 ]; then
     msg "${GREEN}done${NOFORMAT}"
   else
@@ -627,7 +637,6 @@ fi
 echo "Collecting pt-pg-summary: "
 if ! exists ${PT_PG_SUMMARY}; then
   msg "${RED}error - Percona Toolkit not found${NOFORMAT}"
-  #exit 1
 else
   ${PT_PG_SUMMARY} -U ${PG_USER} --password=${PG_PASSWORD} > ${PTDEST}/pt-pg-summary.txt
   if [ $? -eq 0 ]; then
@@ -646,27 +655,31 @@ else
   SQLFILE="gather_old.sql"
 fi
 echo -n "Downloading '${SQLFILE}': "
-if [ "$PSQL_EXISTS" = true ]; then
-  curl -sL https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/${SQLFILE} --output ${PTDEST}/${SQLFILE}
-  if [ $? -eq 0 ]; then
-    msg "${GREEN}done${NOFORMAT}"
+if [ "${SKIP_DOWNLOADS}" = false ]; then
+  if [ "$PSQL_EXISTS" = true ]; then
+    curl -sL https://raw.githubusercontent.com/percona/support-snippets/master/postgresql/pg_gather/${SQLFILE} --output ${PTDEST}/${SQLFILE}
+    if [ $? -eq 0 ]; then
+      msg "${GREEN}done${NOFORMAT}"
 
-    echo -n "Executing '${SQLFILE}' (20+ sec): "
-    if [ -f "$PTDEST/$SQLFILE" ]; then
-      ${PSQL_CONNECT_STR} -X -f ${PTDEST}/${SQLFILE} > ${PTDEST}/psql_gather.txt
-      if [ $? -eq 0 ]; then
-        msg "${GREEN}done${NOFORMAT}"
+      echo -n "Executing '${SQLFILE}' (20+ sec): "
+      if [ -f "$PTDEST/$SQLFILE" ]; then
+        ${PSQL_CONNECT_STR} -X -f ${PTDEST}/${SQLFILE} > ${PTDEST}/psql_gather.txt
+        if [ $? -eq 0 ]; then
+          msg "${GREEN}done${NOFORMAT}"
+        else
+          msg "${RED}failed${NOFORMAT}"
+        fi
       else
         msg "${RED}failed${NOFORMAT}"
       fi
     else
-      msg "${RED}failed${NOFORMAT}"
+      msg "${RED}failed (file does not exist)${NOFORMAT}"
     fi
   else
-    msg "${RED}failed (file does not exist)${NOFORMAT}"
+    msg "${RED}failed (psql does not exist)${NOFORMAT}"
   fi
 else
-  msg "${RED}failed (psql does not exist)${NOFORMAT}"
+  msg "${YELLOW}skipped (per user request)${NOFORMAT}"
 fi
 
 echo
